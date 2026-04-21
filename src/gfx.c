@@ -8,10 +8,18 @@
 
 #include <math.h>
 
+#if __EMSCRIPTEN__
+#include <emscripten.h>
+EMSCRIPTEN_RESULT emscripten_get_canvas_element_size(const char *target,
+                                                     int *width, int *height);
+#endif
+
 static unsigned char keys[SDLK_LAST];
 static int mx, my;
 
+#if !__EMSCRIPTEN__
 static int avoid_closing = 0;
+#endif
 
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
@@ -273,6 +281,7 @@ int gfx_load_image(struct image *img, char *file) {
 
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glGenTextures(1, &id);
+
     img->id = id;
     glBindTexture(GL_TEXTURE_2D, img->id);
 
@@ -496,8 +505,15 @@ unsigned char gfx_char(void) {
     return r;
 }
 
+#if __EMSCRIPTEN__
+static void (*render)(unsigned long ms, void *data);
+void *data;
+
+static void loop(void) {
+#else
 void gfx_mainloop(void render(unsigned long ms, void *data), void *data) {
     do{
+#endif
         unsigned long int last, new;
         unsigned int w, h;
 
@@ -513,7 +529,9 @@ void gfx_mainloop(void render(unsigned long ms, void *data), void *data) {
         while(SDL_PollEvent(&event)){
             switch(event.type){
                 case SDL_QUIT:
+#if !__EMSCRIPTEN__
                     if(!avoid_closing) goto END;
+#endif
                     break;
 
                 case SDL_VIDEORESIZE:
@@ -581,6 +599,14 @@ void gfx_mainloop(void render(unsigned long ms, void *data), void *data) {
             }
         }
 
+#if __EMSCRIPTEN__
+        emscripten_get_canvas_element_size("#canvas", (int*)&w, (int*)&h);
+
+        printf("%u, %u\n", w, h);
+
+        resize = w != width || h != height;
+#endif
+
         if(resize){
             if(SDL_SetVideoMode(w, h, bpp, FLAGS)){
                 handle_resize(w, h);
@@ -598,11 +624,22 @@ void gfx_mainloop(void render(unsigned long ms, void *data), void *data) {
 
         buttons[B_SCROLLUP] = 0;
         buttons[B_SCROLLDOWN] = 0;
+#if __EMSCRIPTEN__
+}
+
+void gfx_mainloop(void r(unsigned long ms, void *data), void *d) {
+    render = r;
+    data = d;
+
+    emscripten_set_main_loop(loop, 0, 0);
+}
+#else
     }while(1);
 
 END:
     SDL_Quit();
 }
+#endif
 
 void gfx_free(void) {
     /**/

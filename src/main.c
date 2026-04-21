@@ -29,9 +29,11 @@ int main(int argc, char **argv) {
 
     gfx_mainloop(render, NULL);
 
+#if !__EMSCRIPTEN__
     game_free(&game);
 
     gfx_free();
+#endif
 
     return 0;
 }
